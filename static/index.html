@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>VulnerableFunc Counter</title>
+  <style>
+    body { font-family: sans-serif; padding: 2rem; }
+    #count { font-size: 2rem; margin: .5rem 0; }
+  </style>
+</head>
+<body>
+  <h1>VulnerableFunc Invocations</h1>
+  <div id="count">0</div>
+  <button id="btn">Call VulnerableFunc</button>
+
+  <script>
+    const countEl = document.getElementById("count");
+    const btn     = document.getElementById("btn");
+
+    // Fetch and render the current count
+    function refresh() {
+      fetch("/count")
+        .then(r => r.json())
+        .then(data => { countEl.textContent = data.Count; })
+        .catch(console.error);
+    }
+
+    // On button click: POST /vulnerable, then update
+    btn.addEventListener("click", () => {
+      fetch("/vulnerable", { method: "POST" })
+        .then(r => r.json())
+        .then(data => { countEl.textContent = data.Count; })
+        .catch(console.error);
+    });
+
+    // Poll every 2 seconds to pick up external changes
+    setInterval(refresh, 2000);
+    // initial load
+    refresh();
+  </script>
+</body>
+</html>
