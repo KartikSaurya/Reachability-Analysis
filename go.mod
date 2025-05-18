@@ -1,6 +1,6 @@
 module example.com
 
-go 1.24
+go 1.24.0
 
 require (
 	github.com/aquasecurity/libbpfgo v0.4.6-libbpf-1.1.0

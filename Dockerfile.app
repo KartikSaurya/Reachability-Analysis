@@ -33,14 +33,15 @@ COPY --from=bpf-builder /src/hook_funcs.bpf.o bpf/hook_funcs.bpf.o
 COPY go.mod go.sum ./
 RUN go mod download
 
-COPY cmd/server cmd/loader ./
+COPY cmd/ ./cmd/
+COPY internal/ ./internal/
 
 RUN mkdir -p /out
 
 # build the HTTP server (no cgo)
 RUN cd cmd/server && \
     CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
-      go build -trimpath -o /out/server_binary
+      go build -gcflags="-l" -o /out/server_binary
 
 # build the loader (with libbpf cgo)
 RUN cd cmd/loader && \
@@ -67,4 +68,5 @@ COPY govuln.json                            .
 
 EXPOSE 8080 2112
 
-ENTRYPOINT ["./loader", "/host/server"]
+# Run both server_binary and loader, probing server_binary
+ENTRYPOINT ["/bin/sh", "-c", "./server_binary & ./loader /app/server_binary"]

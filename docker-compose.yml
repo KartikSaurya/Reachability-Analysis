@@ -9,7 +9,7 @@ services:
     volumes:
       - /lib/modules:/lib/modules:ro
       - /sys/kernel/debug:/sys/kernel/debug:ro
-      - ./server_binary:/host/server:ro
+      # - ./server_binary:/host/server:ro
     ports:
       - "8080:8080"
       - "2112:2112"

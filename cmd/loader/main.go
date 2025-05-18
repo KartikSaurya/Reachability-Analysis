@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -26,9 +27,50 @@ var execCounter = prometheus.NewCounterVec(
 
 func init() {
 	prometheus.MustRegister(execCounter)
+
+	// Define log file path
+	logFilePath := "app.log"
+
+	// Check if log file exists, create it if it doesn't
+	_, err := os.Stat(logFilePath)
+	if os.IsNotExist(err) {
+		// Create the log file
+		file, err := os.Create(logFilePath)
+		if err != nil {
+			log.Fatalf("failed to create log file %s: %v", logFilePath, err)
+		}
+		file.Close() // Close the file after creation
+	} else if err != nil {
+		log.Fatalf("failed to check log file %s: %v", logFilePath, err)
+	}
+
+	// Open log file for appending
+	logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatalf("failed to open log file %s: %v", logFilePath, err)
+	}
+
+	// Log to both file and stdout
+	multiWriter := io.MultiWriter(os.Stdout, logFile)
+	log.SetOutput(multiWriter)
+	log.SetFlags(log.LstdFlags | log.Lshortfile) // Include timestamp and file:line
 }
 
 func main() {
+	// Validate command-line arguments
+	binaryPath := "/app/server_binary" // Default to container's server_binary
+	if len(os.Args) >= 2 {
+		binaryPath = os.Args[1]
+	}
+	log.Printf("Using binary path: %s", binaryPath)
+
+	// Verify binary exists
+	if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
+		log.Fatalf("binary path %s does not exist", binaryPath)
+	} else if err != nil {
+		log.Fatalf("failed to check binary path %s: %v", binaryPath, err)
+	}
+
 	// 1) Load static CVE data
 	data, err := ioutil.ReadFile("govuln.json")
 	if err != nil {
@@ -59,10 +101,12 @@ func main() {
 	}
 
 	// 4) Attach the uprobe (offset=0 on the symbol)
-	_, err = prog.AttachUprobe(-1, os.Args[1], 0)
+	log.Printf("Attaching uprobe to binary: %s, symbol: vulnerableHandler", binaryPath)
+	link, err := prog.AttachUprobe(-1, binaryPath, 0)
 	if err != nil {
 		log.Fatalf("failed to attach uprobe: %v", err)
 	}
+	log.Printf("Uprobe attached successfully, link: %v", link)
 
 	// 5) Set up perf buffer channels
 	events := make(chan []byte)
@@ -87,6 +131,7 @@ func main() {
 	for {
 		select {
 		case data := <-events:
+			log.Printf("Received event, data length: %d", len(data))
 			var name [64]byte
 			copy(name[:], data[:64])
 			funcName := string(bytes.Trim(name[:], "\x00"))
@@ -94,7 +139,7 @@ func main() {
 			log.Printf("Executed: %s", funcName)
 
 		case lostCount := <-lost:
-			log.Printf("lost %d events\n", lostCount)
+			log.Printf("Lost %d events", lostCount)
 
 		case <-sig:
 			log.Println("shutdown signal received, exiting")
